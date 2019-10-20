@@ -4,6 +4,8 @@ require 'sinatra'
 require 'json'
 require 'jwt'
 
+set server: 'thin'
+
 $userlist = {}
 $secret = 'SECRET'
 $connections = []
@@ -14,6 +16,17 @@ def validate_token(token)
 
 rescue
   false
+end
+
+before do
+  headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+  headers['Access-Control-Allow-Origin'] = '*'
+  headers['Access-Control-Allow-Headers'] = 'accept, authorization, origin'
+end
+
+options '*' do
+  response.headers['Allow'] = 'HEAD,GET,PUT,DELETE,OPTIONS,POST'
+  response.headers['Access-Control-Allow-Headers'] = 'X-Requested-With, X-HTTP-Method-Override, Content-Type, Cache-Control, Accept'
 end
 
 post '/login' do
@@ -42,7 +55,7 @@ get '/stream/:token', provides: 'text/event-stream' do |_token|
 
   stream(:keep_open) do |out|
     $connections << out
-
+    out << "data: Hello from server"
     # purge dead connections
     $connections.reject!(&:closed?)
   end
