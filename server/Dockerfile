@@ -5,9 +5,11 @@ WORKDIR /app
 
 COPY Gemfile Gemfile.lock ./
 
-RUN gem install bundler && \
-    bundle config --global frozen 1 && \
-    bundle install
+RUN ping -c 1 8.8.8.8
+
+RUN gem install bundler
+RUN bundle config --global frozen 1
+RUN bundle install
 
 COPY app.rb config.ru puma.rb ./
-CMD exec bundle exec puma -C puma.rb
+CMD exec bundle exec thin start
