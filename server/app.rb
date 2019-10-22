@@ -55,8 +55,8 @@ get '/stream/:token', provides: 'text/event-stream' do |_token|
 
   stream(:keep_open) do |out|
     $connections << out
-    out << "event: Hey"
-    out << "data: Hello from server"
+    out << "event: Hey\n"
+    out << "data: Hello from server\n\n"
     # purge dead connections
     $connections.reject!(&:closed?)
   end
