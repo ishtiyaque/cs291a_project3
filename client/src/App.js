@@ -27,109 +27,12 @@ class App extends React.Component{
         );
 
         stream.addEventListener(
-            //'Hey',
+            'Hey',
             (event) => {
                 console.log(event);
             }
         )
-        // stream.addEventListener(
-        //     "Disconnect",
-        //     function(event) {
-        //         stream.close();
-        //         // handle_disconnect();
-        //         delete sessionStorage.accessToken;
-        //         // show_login();
-        //     },
-        //     false
-        // );
-        //
-        // stream.addEventListener(
-        //     "Join",
-        //     function(event) {
-        //         var data = JSON.parse(event.data);
-        //         users.add(data.user);
-        //         update_users();
-        //         console.log(data);
-        //         output(
-        //             document.createTextNode(
-        //                 date_format(data["created"]) + " JOIN: " + data.user
-        //             )
-        //         );
-        //     },
-        //     false
-        // );
-        //
-        // stream.addEventListener(
-        //     "Message",
-        //     function(event) {
-        //         var data = JSON.parse(event.data);
-        //         console.log(data);
-        //         output(
-        //             document.createTextNode(
-        //                 date_format(data["created"]) +
-        //                 " (" +
-        //                 data.user +
-        //                 ") " +
-        //                 data.message
-        //             )
-        //         );
-        //     },
-        //     false
-        // );
-        //
-        // stream.addEventListener(
-        //     "Part",
-        //     function(event) {
-        //         var data = JSON.parse(event.data);
-        //         users.delete(data.user);
-        //         update_users();
-        //         console.log(data);
-        //         output(
-        //             document.createTextNode(
-        //                 date_format(data["created"]) + " PART: " + data.user
-        //             )
-        //         );
-        //     },
-        //     false
-        // );
-        //
-        // stream.addEventListener(
-        //     "ServerStatus",
-        //     function(event) {
-        //         var data = JSON.parse(event.data);
-        //         console.log(data);
-        //         output(
-        //             document.createTextNode(
-        //                 date_format(data["created"]) + " STATUS: " + data.status
-        //             )
-        //         );
-        //     },
-        //     false
-        // );
-        //
-        // stream.addEventListener(
-        //     "Users",
-        //     function(event) {
-        //         handle_connect();
-        //         users = new Set(JSON.parse(event.data).users);
-        //         update_users();
-        //     },
-        //     false
-        // );
-        //
-        // stream.addEventListener(
-        //     "error",
-        //     function(event) {
-        //         handle_disconnect();
-        //         if (event.target.readyState == 2) {
-        //             delete sessionStorage.accessToken;
-        //             // show_login();
-        //         } else {
-        //             console.log("Disconnected, retrying");
-        //         }
-        //     },
-        //     false
-        // );
+        
     }
 
     render() {
