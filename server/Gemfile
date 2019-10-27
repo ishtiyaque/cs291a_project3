@@ -5,3 +5,5 @@ gem 'thin'
 gem 'jwt'
 gem 'json'
 gem 'sinatra'
+
+gem "rufus-scheduler", "~> 3.6"

@@ -2,9 +2,11 @@ import React from 'react';
 import CssBaseline from '@material-ui/core/CssBaseline';
 import Typography from '@material-ui/core/Typography';
 import Container from '@material-ui/core/Container';
+import Paper from '@material-ui/core/Paper';
 import TextField from '@material-ui/core/TextField';
 import Avatar from '@material-ui/core/Avatar';
 import Chip from '@material-ui/core/Chip';
+import Button from '@material-ui/core/Button';
 import axios from 'axios';
 import LoginDialog from './login';
 import './App.css';
@@ -21,6 +23,7 @@ class App extends React.Component{
     }
 
     setToken = token => {
+        axios.defaults.headers.common = {'Authorization': `Bearer ${token}`}
         this.setState({ token });
         this.start_stream(token);
     };
@@ -44,16 +47,22 @@ class App extends React.Component{
             'Join',
             (event) => {
                 console.log(event);
-                const { userList } = this.state;
-                userList.push(JSON.parse(event.data).user)
-                this.setState({ userList: userList.filter((user, pos) => userList.indexOf(user) === pos )});
+                const { userList, messageList } = this.state;
+                const data = JSON.parse(event.data);
+                userList.push(data.user)
+                messageList.push({ createdAt: data.created, message: data.user, event: 'Join' });
+                this.setState({ userList: userList.filter((user, pos) => userList.indexOf(user) === pos ), messageList});
             }
         );
 
         stream.addEventListener(
             'Message',
             (event) => {
-                console.log(event);
+                const { messageList } = this.state;
+                const data = JSON.parse(event.data);
+                messageList.push({ createdAt: data.created, message: `(${data.user}) ${data.message}`, event: 'Message' });
+
+                this.setState({ messageList});
             }
         );
 
@@ -61,8 +70,10 @@ class App extends React.Component{
             'Part',
             (event) => {
                 console.log(event, JSON.parse(event.data).user);
-                const { userList } = this.state;
-                this.setState({ userList: userList.filter(user => user !== JSON.parse(event.data).user) });
+                const data = JSON.parse(event.data);
+                const { userList, messageList } = this.state;
+                messageList.push({ createdAt: data.created, message: data.user, event: 'Part' });
+                this.setState({ userList: userList.filter(user => user !== JSON.parse(event.data).user), messageList });
             }
         );
 
@@ -70,6 +81,11 @@ class App extends React.Component{
             'ServerStatus',
             (event) => {
                 console.log(event);
+                const { messageList } = this.state;
+                const data = JSON.parse(event.data);
+                messageList.push({ createdAt: data.created, message: data.status, event: 'Message' });
+
+                this.setState({ messageList});
             }
         );
 
@@ -97,7 +113,7 @@ class App extends React.Component{
             <CssBaseline />
             <Container maxWidth="xl">
               <Typography component="div" style={{ display: 'flex', flexDirection: 'row',height: '80vh', width: '100%' }}>
-                  <Typography
+                  <Paper
                       component="div"
                       style={{
                           height: '80vh',
@@ -107,11 +123,20 @@ class App extends React.Component{
                           borderColor: 'grey',
                           borderStyle: 'solid',
                           marginRight: '5px',
-                          marginLeft: '6px'
+                          marginLeft: '6px',
+                          maxHeight: '80vh',
+                          overflow: 'auto'
                       }}
                   >
-                  </Typography>
-                  <Typography
+                      <div style={{ padding: 2 }} />
+                      {this.state.messageList.map(({createdAt, event, message}) =>
+                          <Typography variant="body1" display="block" gutterBottom key={createdAt}
+                                      style={{textAlign: 'left', paddingLeft: 5}}>
+                              {new Date(Math.round(createdAt)).toString()} {event.toUpperCase()}: {message}
+                          </Typography>
+                      )}
+                  </Paper>
+                  <Paper
                       component="div"
                       style={{
                           height: '80vh',
@@ -120,7 +145,9 @@ class App extends React.Component{
                           borderWidth: '2px',
                           borderColor: 'grey',
                           borderStyle: 'solid',
-                          paddingRight: 2
+                          paddingRight: 2,
+                          maxHeight: '80vh',
+                          overflow: 'auto'
                       }}
                   >
                       <h3 style={{ textAlign: 'center', borderWidth: '0px 0px 2px 0px', borderStyle: 'solid', margin: 5, borderColor: 'grey' }} >Users</h3>
@@ -134,12 +161,12 @@ class App extends React.Component{
                               />
                           </div>
                       )}
-                  </Typography>
+                  </Paper>
               </Typography>
               <TextField
-                id="outlined-full-width"
+                id="message"
                 // label="Label"
-                style={{ margin: 9, align: 'Left' }}
+                style={{ margin: 9, align: 'Left', width: '95%' }}
                 placeholder="Write Here!"
                 // helperText="Full width!"
                 fullWidth
@@ -149,6 +176,23 @@ class App extends React.Component{
                   shrink: true,
                 }}
               />
+              <Button
+                variant="contained"
+                color="primary"
+                style={{ marginTop: 10, height: 50 }}
+                // className={classes.button}
+                // endIcon={<Icon>send</Icon>}
+                onClick={() => {
+                    const message = document.getElementById("message").value;
+                    if (message) {
+                        console.log(message);
+                        axios.post('/message', { body: message });
+                        document.getElementById("message").value = "";
+                    }
+                }}
+              >
+                Send
+              </Button>
             </Container>
           </React.Fragment>
         </div>
