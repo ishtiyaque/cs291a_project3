@@ -3,6 +3,8 @@ import CssBaseline from '@material-ui/core/CssBaseline';
 import Typography from '@material-ui/core/Typography';
 import Container from '@material-ui/core/Container';
 import TextField from '@material-ui/core/TextField';
+import Avatar from '@material-ui/core/Avatar';
+import Chip from '@material-ui/core/Chip';
 import axios from 'axios';
 import LoginDialog from './login';
 import './App.css';
@@ -12,28 +14,74 @@ class App extends React.Component{
         super(props);
 
         this.state = {
-            token: null
+            token: null,
+            userList: [],
+            messageList: [],
         };
     }
 
     setToken = token => {
         this.setState({ token });
-        axios.get(`/stream/${token}`);
+        this.start_stream(token);
     };
 
-    start_stream = () => {
+    start_stream = (token) => {
+        console.log("Begin: ");
+        console.log(new Date());
         const stream = new EventSource(
-            sessionStorage.url + "/stream/" + sessionStorage.accessToken
+            `${axios.defaults.baseURL}/stream/${token}`
         );
 
         stream.addEventListener(
-            'Hey',
+            'Disconnect',
             (event) => {
                 console.log(event);
             }
-        )
-        
-    }
+        );
+
+
+        stream.addEventListener(
+            'Join',
+            (event) => {
+                console.log(event);
+                const { userList } = this.state;
+                userList.push(JSON.parse(event.data).user)
+                this.setState({ userList: userList.filter((user, pos) => userList.indexOf(user) === pos )});
+            }
+        );
+
+        stream.addEventListener(
+            'Message',
+            (event) => {
+                console.log(event);
+            }
+        );
+
+        stream.addEventListener(
+            'Part',
+            (event) => {
+                console.log(event, JSON.parse(event.data).user);
+                const { userList } = this.state;
+                this.setState({ userList: userList.filter(user => user !== JSON.parse(event.data).user) });
+            }
+        );
+
+        stream.addEventListener(
+            'ServerStatus',
+            (event) => {
+                console.log(event);
+            }
+        );
+
+        stream.addEventListener(
+            'Users',
+            (event) => {
+                console.log(event.data);
+                const userList = JSON.parse(event.data).users;
+                this.setState({ userList: userList.filter((user, pos) => userList.indexOf(user) === pos )});
+            }
+        );
+    };
 
     render() {
       return (
@@ -76,6 +124,16 @@ class App extends React.Component{
                       }}
                   >
                       <h3 style={{ textAlign: 'center', borderWidth: '0px 0px 2px 0px', borderStyle: 'solid', margin: 5, borderColor: 'grey' }} >Users</h3>
+                      {this.state.userList.map(user =>
+                          <div style={{ width: '100%' }} key={user} >
+                              <Chip
+                                  avatar={<Avatar>{user[0].toUpperCase()}</Avatar>}
+                                  label={user}
+                                  variant="outlined"
+                                  style={{ margin: '4px 0px' }}
+                              />
+                          </div>
+                      )}
                   </Typography>
               </Typography>
               <TextField

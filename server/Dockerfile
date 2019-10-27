@@ -5,8 +5,6 @@ WORKDIR /app
 
 COPY Gemfile Gemfile.lock ./
 
-RUN ping -c 1 8.8.8.8
-
 RUN gem install bundler
 RUN bundle config --global frozen 1
 RUN bundle install

@@ -8,7 +8,23 @@ set server: 'thin'
 
 $userlist = {}
 $secret = 'SECRET'
-$connections = []
+$onlineUsers = []
+$messageHistory = []
+
+class OnlineUser
+  def initialize(username, connection)
+    # Instance variables
+    @username = username
+    @connection = connection
+  end
+
+  def getUserName
+    return @username
+  end
+  def getConnection
+    return @connection
+  end
+end
 
 def validate_token(token)
   decoded = (JWT.decode token, $secret, true, algorithm: 'HS256')[0]
@@ -16,6 +32,39 @@ def validate_token(token)
 
 rescue
   false
+end
+
+def sendMessage(message, shouldSave=True)
+  for user in $onlineUsers do
+    user.getConnection << message
+  end
+  print message
+  print shouldSave
+  $messageHistory << message if shouldSave
+end
+
+def sendHistory(user)
+  for message in $messageHistory
+    user.getConnection << message
+  end
+end
+
+def sendPartMessagesAndUpdateUserList
+  messages = []
+  for user in $onlineUsers do
+    if user.getConnection().closed?
+      time =  Time.now.to_f
+      messages << "\nevent: Part\ndata: {\"user\": \"#{user.getUserName}\", \"created\": #{time}}\n\n\n"
+      $onlineUsers = $onlineUsers.select {|_user| _user.getUserName != user.getUserName}
+    end
+  end
+
+  for message in messages
+    print "Seding Part Message"
+    print message
+    sendMessage(message, false)
+  end
+
 end
 
 before do
@@ -50,14 +99,29 @@ post '/login' do
 end
 
 get '/stream/:token', provides: 'text/event-stream' do |_token|
-  print _token
   return 403 unless validate_token _token
 
+  decoded = (JWT.decode _token, $secret, true, algorithm: 'HS256')[0]
+  username = decoded['username']
+
+
   stream(:keep_open) do |out|
-    $connections << out
-    out << "event: Hey\n"
-    out << "data: Hello from server\n\n"
+    #print "CLass is :#{out.class}\n"
+    newUser = OnlineUser.new(username, out)
+    time =  Time.now.to_f
+
+    if !($onlineUsers.map {|user| user.getUserName}).include? username
+      $onlineUsers = $onlineUsers.select {|user| user.getUserName != username}
+      $onlineUsers << newUser
+      out << "event: Users\n"
+      out << "data: {\"users\": #{$onlineUsers.map {|user| user.getUserName}},\n"
+      out << "data: \"created\": #{time}}\n\n"
+      sendMessage "event: Join\ndata: {\"user\": \"#{username}\", \"created\": #{time}}\n\n", false
+
+      sendHistory newUser
+      sendPartMessagesAndUpdateUserList()
+    end
     # purge dead connections
-    $connections.reject!(&:closed?)
+    #$onlineUsers.map {}.reject!(&:closed?)
   end
 end
