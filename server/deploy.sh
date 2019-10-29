@@ -1,2 +1,2 @@
-docker build -t mrbathat/project3_${CS291_ACCOUNT} .
+docker build -t mrbathat/project3_abtinbateni .
 docker push mrbathat/project3_abtinbateni
