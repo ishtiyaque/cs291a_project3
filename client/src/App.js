@@ -100,6 +100,26 @@ class App extends React.Component{
         );
     };
 
+    sendMessage = () => {
+        const message = document.getElementById("message").value;
+        if (message) {
+            console.log(message);
+
+            var form = new FormData();
+            form.append("message", message);
+
+            var request = new XMLHttpRequest();
+            request.open("POST", axios.defaults.baseURL + "/message");
+            request.setRequestHeader(
+                "Authorization",
+                "Bearer " + this.state.token
+            );
+            request.send(form);
+
+            document.getElementById("message").value = "";
+        }
+    }
+
     render() {
       return (
         <div className="App">
@@ -167,7 +187,7 @@ class App extends React.Component{
               <TextField
                 id="message"
                 // label="Label"
-                style={{ margin: 9, align: 'Left', width: '95%' }}
+                style={{ margin: 9, align: 'Left', width: '90%' }}
                 placeholder="Write Here!"
                 // helperText="Full width!"
                 fullWidth
@@ -176,6 +196,13 @@ class App extends React.Component{
                 InputLabelProps={{
                   shrink: true,
                 }}
+                onKeyPress={(ev) => {
+                    console.log(`Pressed keyCode ${ev.key}`);
+                    if (ev.key === 'Enter') {
+                        this.sendMessage();
+                        ev.preventDefault();
+                    }
+                }}
               />
               <Button
                 variant="contained"
@@ -183,32 +210,7 @@ class App extends React.Component{
                 style={{ marginTop: 10, height: 50 }}
                 // className={classes.button}
                 // endIcon={<Icon>send</Icon>}
-                onClick={() => {
-                    const message = document.getElementById("message").value;
-                    if (message) {
-                        console.log(message);
-
-                        var form = new FormData();
-                        form.append("message", message);
-
-                        var request = new XMLHttpRequest();
-                        request.open("POST", axios.defaults.baseURL + "/message");
-                        request.setRequestHeader(
-                            "Authorization",
-                            "Bearer " + this.state.token
-                        );
-                        request.send(form);
-
-                        // const formData = new FormData().append('message', message);
-                        // axios.post('/message', formData, {
-                        //     headers: {
-                        //         Authorization: `Bearer ${this.state.token}`,
-                        //         // 'content-type': 'multipart/form-data',
-                        //     }
-                        // });
-                        document.getElementById("message").value = "";
-                    }
-                }}
+                onClick={this.sendMessage}
               >
                 Send
               </Button>
