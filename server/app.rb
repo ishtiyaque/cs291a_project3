@@ -38,11 +38,11 @@ rescue
 end
 
 def fetchTokenUsername(token)
-  decoded = (JWT.decode _token, $secret, true, algorithm: 'HS256')[0]
+  decoded = (JWT.decode token, $secret, true, algorithm: 'HS256')[0]
   decoded['username']
 end
 
-def sendMessage(message, shouldSave=True)
+def sendMessage(message, shouldSave=TRUE)
   for user in $onlineUsers do
     user.getConnection << message
   end
@@ -72,10 +72,19 @@ def sendPartMessagesAndUpdateUserList
     print message
     sendMessage(message, false)
   end
-
 end
 
-$scheduler.every '10s' do
+def disconnect(userList)
+  for user in userList do
+    time =  Time.now.to_f
+    message = "\nevent: Disconnect\ndata: {\"created\": #{time}}\n\n\n"
+    user.getConnection << message
+    user.getConnection().close()
+    $onlineUsers = $onlineUsers.select {|_user| _user.getUserName != user.getUserName}
+  end
+end
+
+$scheduler.every '3600s' do
   print "Sending status\n"
   time =  Time.now.to_f
   $uptime += 1
@@ -86,7 +95,7 @@ $scheduler.every '10s' do
   end
   $messageHistory << message
 end
-$scheduler.join
+#$scheduler.join
 
 before do
   headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
@@ -96,7 +105,7 @@ end
 
 options '*' do
   response.headers['Allow'] = 'HEAD,GET,PUT,DELETE,OPTIONS,POST'
-  response.headers['Access-Control-Allow-Headers'] = 'X-Requested-With, X-HTTP-Method-Override, Content-Type, Cache-Control, Accept'
+  response.headers['Access-Control-Allow-Headers'] = 'X-Requested-With, X-HTTP-Method-Override, Content-Type, Cache-Control, Accept, Authorization'
 end
 
 post '/login' do
@@ -123,23 +132,22 @@ post '/message' do
   sendPartMessagesAndUpdateUserList
 
   token = ""
-  event['headers'].each do |key, value|
-    if key.downcase == 'authorization'
-      authBody = value.split(' ')
-      return 403 if authBody.count != 2
-      return 403 if authBody[0] != 'Bearer'
-      token = authBody[1]
-    end
-  end
+  value = request.env["HTTP_AUTHORIZATION"]
+  return 403 if value == nil
+  authBody = value.split(' ')
+  return 403 if authBody.count != 2
+  return 403 if authBody[0] != 'Bearer'
+  token = authBody[1]
 
-  return 403 unless validate_token _token
-  return 422 if message == nil || message == ""
-
+  #puts "\nToken: "+token
+  return 403 unless validate_token token
   message = params['message']
+  return 422 if message == nil || message == ""
+  return 201
   time =  Time.now.to_f
-  user = fetchTokenUsername token
+  username = fetchTokenUsername token
 
-  sendMessage "\nevent: Message\ndata: {\"user\": \"#{user.getUserName}\", \"created\": #{time}, \"message\": \"#{message}\"}\n\n\n"
+  sendMessage "\nevent: Message\ndata: {\"user\": \"#{username}\", \"created\": #{time}, \"message\": \"#{message}\"}\n\n\n"
 end
 
 get '/stream/:token', provides: 'text/event-stream' do |_token|
@@ -150,18 +158,22 @@ get '/stream/:token', provides: 'text/event-stream' do |_token|
     #print "CLass is :#{out.class}\n"
     newUser = OnlineUser.new(username, out)
     time =  Time.now.to_f
+    isNewUser = TRUE
 
-    if !($onlineUsers.map {|user| user.getUserName}).include? username
-      $onlineUsers = $onlineUsers.select {|user| user.getUserName != username}
-      $onlineUsers << newUser
-      out << "event: Users\n"
-      out << "data: {\"users\": #{$onlineUsers.map {|user| user.getUserName}},\n"
-      out << "data: \"created\": #{time}}\n\n"
-      sendMessage "event: Join\ndata: {\"user\": \"#{username}\", \"created\": #{time}}\n\n", false
-
-      sendHistory newUser
-      sendPartMessagesAndUpdateUserList()
+    if ($onlineUsers.map {|user| user.getUserName}).include? username
+      isNewUser = FALSE
+      disconnect($onlineUsers.select {|user| user.getUserName == username})
     end
+    #$onlineUsers = $onlineUsers.select {|user| user.getUserName != username}
+    $onlineUsers << newUser
+    out << "event: Users\n"
+    out << "data: {\"users\": #{$onlineUsers.map {|user| user.getUserName}},\n"
+    out << "data: \"created\": #{time}}\n\n"
+    sendHistory newUser
+    if isNewUser == TRUE
+      sendMessage "event: Join\ndata: {\"user\": \"#{username}\", \"created\": #{time}}\n\n", false
+    end
+    sendPartMessagesAndUpdateUserList()
     # purge dead connections
     #$onlineUsers.map {}.reject!(&:closed?)
   end
