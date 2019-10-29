@@ -12,7 +12,8 @@ $scheduler = Rufus::Scheduler.new
 $userlist = {}
 $secret = 'SECRET'
 $onlineUsers = []
-$messageHistory = []
+$messageHistory = ["\nevent: ServerStatus\ndata: {\"status\": \"Server Started\", \"created\": #{Time.now.to_f}}\n\n\n"]
+#$messageHistory = []
 
 class OnlineUser
   def initialize(username, connection)
@@ -120,6 +121,10 @@ post '/login' do
   if $userlist[username] == password
     token_payload = { 'username' => username, 'password' => password }
     token = JWT.encode token_payload, $secret, 'HS256'
+
+    if ($onlineUsers.map {|user| user.getUserName}).include? username
+      disconnect($onlineUsers.select {|user| user.getUserName == username})
+    end
     status 201
     return { 'token' => token }.to_json
   else
@@ -142,8 +147,9 @@ post '/message' do
   #puts "\nToken: "+token
   return 403 unless validate_token token
   message = params['message']
+  print "message is: #{message}"
   return 422 if message == nil || message == ""
-  return 201
+  status 201
   time =  Time.now.to_f
   username = fetchTokenUsername token
 
@@ -152,7 +158,7 @@ end
 
 get '/stream/:token', provides: 'text/event-stream' do |_token|
   return 403 unless validate_token _token
-
+  print "Last event id: #{request.env['HTTP_LAST_EVENT_ID']}\n"
   username = fetchTokenUsername _token
   stream(:keep_open) do |out|
     #print "CLass is :#{out.class}\n"
@@ -162,15 +168,15 @@ get '/stream/:token', provides: 'text/event-stream' do |_token|
 
     if ($onlineUsers.map {|user| user.getUserName}).include? username
       isNewUser = FALSE
-      disconnect($onlineUsers.select {|user| user.getUserName == username})
+      $onlineUsers = $onlineUsers.select {|_user| _user.getUserName != username}
     end
     #$onlineUsers = $onlineUsers.select {|user| user.getUserName != username}
     $onlineUsers << newUser
     out << "event: Users\n"
     out << "data: {\"users\": #{$onlineUsers.map {|user| user.getUserName}},\n"
     out << "data: \"created\": #{time}}\n\n"
-    sendHistory newUser
     if isNewUser == TRUE
+      sendHistory newUser
       sendMessage "event: Join\ndata: {\"user\": \"#{username}\", \"created\": #{time}}\n\n", false
     end
     sendPartMessagesAndUpdateUserList()

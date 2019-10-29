@@ -40,8 +40,8 @@ export default function FormDialog(props) {
                         id="server"
                         label="Chat server"
                         type="text"
-                        defaultValue = "http://chat.cs291.com"
-                        // defaultValue = "http://localhost:4000"  // TO BE REMOVED LATER
+                        //defaultValue = "http://chat.cs291.com"
+                         defaultValue = "http://localhost:4000"  // TO BE REMOVED LATER
                         fullWidth
                     />
                     <TextField
