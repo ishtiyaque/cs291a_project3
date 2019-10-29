@@ -23,14 +23,13 @@ class App extends React.Component{
     }
 
     setToken = token => {
-        axios.defaults.headers.common = {'Authorization': `Bearer ${token}`}
         this.setState({ token });
         this.start_stream(token);
     };
 
     start_stream = (token) => {
         console.log("Begin: ");
-        console.log(new Date());
+        //console.log(new Date());
         const stream = new EventSource(
             `${axios.defaults.baseURL}/stream/${token}`
         );
@@ -39,6 +38,8 @@ class App extends React.Component{
             'Disconnect',
             (event) => {
                 console.log(event);
+                stream.close();
+                this.setState({ token: null, userList: [], messageList: [] });
             }
         );
 
@@ -104,7 +105,7 @@ class App extends React.Component{
         <div className="App">
           <LoginDialog
             setToken={this.setToken}
-            open={true}
+            open={!this.state.token}
           />
           <h2>
             CS291 Chat App
@@ -132,7 +133,7 @@ class App extends React.Component{
                       {this.state.messageList.map(({createdAt, event, message}) =>
                           <Typography variant="body1" display="block" gutterBottom key={createdAt}
                                       style={{textAlign: 'left', paddingLeft: 5}}>
-                              {new Date(Math.round(createdAt)).toString()} {event.toUpperCase()}: {message}
+                              {new Date(Math.round(createdAt*1000)).toLocaleString()} {event.toUpperCase()}: {message}
                           </Typography>
                       )}
                   </Paper>
@@ -186,7 +187,7 @@ class App extends React.Component{
                     const message = document.getElementById("message").value;
                     if (message) {
                         console.log(message);
-                        axios.post('/message', { body: message });
+                        axios.post('/message', { body: message }, { headers: {Authorization: `Bearer ${this.state.token}`}});
                         document.getElementById("message").value = "";
                     }
                 }}

@@ -9,7 +9,6 @@ import DialogTitle from '@material-ui/core/DialogTitle';
 import axios from 'axios';
 
 export default function FormDialog(props) {
-    const [open, setOpen] = React.useState(true);
     const handleLogin = async () => {
         try {
             let server = document.getElementById("server").value;
@@ -20,8 +19,8 @@ export default function FormDialog(props) {
             params.append('username', username);
             params.append('password', password);
             let response = await axios.post('/login', params);
+            console.log(response);
             props.setToken(response.data.token);
-            setOpen(false);
         } catch (e) {
             console.log(e);
         }
@@ -29,7 +28,7 @@ export default function FormDialog(props) {
 
     return (
         <div>
-            <Dialog open={open}  aria-labelledby="form-dialog-title">
+            <Dialog open={props.open}  aria-labelledby="form-dialog-title">
                 <DialogTitle id="form-dialog-title">Subscribe</DialogTitle>
                 <DialogContent>
                     <DialogContentText>
