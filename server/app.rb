@@ -9,6 +9,10 @@ set server: 'thin'
 $uptime = 0
 $scheduler = Rufus::Scheduler.new
 
+NEW_LOGIN = 0
+RE_LOGIN = 1
+CONNECTED = 2
+
 $userlist = {}
 $secret = 'SECRET'
 $onlineUsers = []
@@ -16,10 +20,11 @@ $messageHistory = ["\nevent: ServerStatus\ndata: {\"status\": \"Server Started\"
 #$messageHistory = []
 
 class OnlineUser
-  def initialize(username, connection)
+  def initialize(username, connection, status)
     # Instance variables
     @username = username
     @connection = connection
+    @status = status
   end
 
   def getUserName
@@ -27,6 +32,18 @@ class OnlineUser
   end
   def getConnection
     return @connection
+  end
+  def getStatus
+    return @status
+  end
+  def setUserName username
+    @username = username
+  end
+  def setConnection connection
+    @connection = connection
+  end
+  def setStatus status
+    @status = status
   end
 end
 
@@ -45,10 +62,10 @@ end
 
 def sendMessage(message, shouldSave=TRUE)
   for user in $onlineUsers do
-    user.getConnection << message
+    if user.getConnection != nil
+      user.getConnection << message
+    end
   end
-  print message
-  print shouldSave
   $messageHistory << message if shouldSave
 end
 
@@ -61,22 +78,30 @@ end
 def sendPartMessagesAndUpdateUserList
   messages = []
   for user in $onlineUsers do
+    if user.getConnection == nil
+      next
+    end
     if user.getConnection().closed?
       time =  Time.now.to_f
       messages << "\nevent: Part\ndata: {\"user\": \"#{user.getUserName}\", \"created\": #{time}}\n\n\n"
+      print "Selected user #{user.getUserName} for Part\n"
       $onlineUsers = $onlineUsers.select {|_user| _user.getUserName != user.getUserName}
     end
   end
 
   for message in messages
-    print "Seding Part Message"
-    print message
+    #print "Seding Part Message"
+    #print message
     sendMessage(message, false)
   end
 end
 
 def disconnect(userList)
   for user in userList do
+    if user.getConnection == nil
+      next
+    end
+    print "Disconnecting #{user.getUserName}\n"
     time =  Time.now.to_f
     message = "\nevent: Disconnect\ndata: {\"created\": #{time}}\n\n\n"
     user.getConnection << message
@@ -86,7 +111,6 @@ def disconnect(userList)
 end
 
 $scheduler.every '3600s' do
-  print "Sending status\n"
   time =  Time.now.to_f
   $uptime += 1
   message = "\nevent: ServerStatus\ndata: {\"status\": \"Server uptime: #{$uptime} hours\", \"created\": #{time}}\n\n\n"
@@ -121,10 +145,13 @@ post '/login' do
   if $userlist[username] == password
     token_payload = { 'username' => username, 'password' => password }
     token = JWT.encode token_payload, $secret, 'HS256'
-
+    status = NEW_LOGIN
     if ($onlineUsers.map {|user| user.getUserName}).include? username
       disconnect($onlineUsers.select {|user| user.getUserName == username})
+      status = RE_LOGIN
     end
+    newUser = OnlineUser.new(username, nil, status)
+    $onlineUsers << newUser
     status 201
     return { 'token' => token }.to_json
   else
@@ -149,37 +176,41 @@ post '/message' do
   message = params['message']
   print "message is: #{message}"
   return 422 if message == nil || message == ""
-  status 201
   time =  Time.now.to_f
   username = fetchTokenUsername token
-
   sendMessage "\nevent: Message\ndata: {\"user\": \"#{username}\", \"created\": #{time}, \"message\": \"#{message}\"}\n\n\n"
+  status 201
 end
 
 get '/stream/:token', provides: 'text/event-stream' do |_token|
   return 403 unless validate_token _token
-  print "Last event id: #{request.env['HTTP_LAST_EVENT_ID']}\n"
+  #print "Last event id: #{request.env['HTTP_LAST_EVENT_ID']}\n"
   username = fetchTokenUsername _token
-  stream(:keep_open) do |out|
-    #print "CLass is :#{out.class}\n"
-    newUser = OnlineUser.new(username, out)
-    time =  Time.now.to_f
-    isNewUser = TRUE
+  print "All users: #{$onlineUsers.map {|user| user.getUserName}} \n"
+  print "\nrequesting user: #{username}\n"
+  user = ($onlineUsers.select {|_user| _user.getUserName == username})[0]
+  if user == nil
+    return 403
+  end
 
-    if ($onlineUsers.map {|user| user.getUserName}).include? username
-      isNewUser = FALSE
-      $onlineUsers = $onlineUsers.select {|_user| _user.getUserName != username}
+  stream(:keep_open) do |out|
+    user.setConnection(out)
+    time =  Time.now.to_f
+
+    if user.getStatus != CONNECTED
+      sendHistory user
+      if user.getStatus == NEW_LOGIN
+        sendMessage "event: Join\ndata: {\"user\": \"#{username}\", \"created\": #{time}}\n\n", false
+      end
+      user.setStatus CONNECTED
     end
+
+
     #$onlineUsers = $onlineUsers.select {|user| user.getUserName != username}
-    $onlineUsers << newUser
     out << "event: Users\n"
     out << "data: {\"users\": #{$onlineUsers.map {|user| user.getUserName}},\n"
     out << "data: \"created\": #{time}}\n\n"
-    if isNewUser == TRUE
-      sendHistory newUser
-      sendMessage "event: Join\ndata: {\"user\": \"#{username}\", \"created\": #{time}}\n\n", false
-    end
-    sendPartMessagesAndUpdateUserList()
+    #sendPartMessagesAndUpdateUserList()
     # purge dead connections
     #$onlineUsers.map {}.reject!(&:closed?)
   end
