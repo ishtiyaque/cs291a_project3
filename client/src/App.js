@@ -187,7 +187,25 @@ class App extends React.Component{
                     const message = document.getElementById("message").value;
                     if (message) {
                         console.log(message);
-                        axios.post('/message', { body: message }, { headers: {Authorization: `Bearer ${this.state.token}`}});
+
+                        var form = new FormData();
+                        form.append("message", message);
+
+                        var request = new XMLHttpRequest();
+                        request.open("POST", axios.defaults.baseURL + "/message");
+                        request.setRequestHeader(
+                            "Authorization",
+                            "Bearer " + this.state.token
+                        );
+                        request.send(form);
+
+                        // const formData = new FormData().append('message', message);
+                        // axios.post('/message', formData, {
+                        //     headers: {
+                        //         Authorization: `Bearer ${this.state.token}`,
+                        //         // 'content-type': 'multipart/form-data',
+                        //     }
+                        // });
                         document.getElementById("message").value = "";
                     }
                 }}
