@@ -16,9 +16,9 @@ CONNECTED = 2
 $userlist = {}
 $secret = 'SECRET'
 $onlineUsers = []
-$messageHistory = ["\nid: 123\nevent: ServerStatus\ndata: {\"status\": \"Server Started\", \"created\": #{Time.now.to_f}}\n\n\n"]
+$messageHistory = ["event: ServerStatus\ndata: {\"status\": \"Server Started\", \"created\": #{Time.now.to_f}}\n\n\n"]
 $isImpMessage = [TRUE]
-#$messageHistory = []
+# $messageHistory = []
 
 class OnlineUser
   def initialize(username, connection, status)
@@ -29,21 +29,26 @@ class OnlineUser
   end
 
   def getUserName
-    return @username
+    @username
   end
+
   def getConnection
-    return @connection
+    @connection
   end
+
   def getStatus
-    return @status
+    @status
   end
-  def setUserName username
+
+  def setUserName(username)
     @username = username
   end
-  def setConnection connection
+
+  def setConnection(connection)
     @connection = connection
   end
-  def setStatus status
+
+  def setStatus(status)
     @status = status
   end
 end
@@ -51,7 +56,6 @@ end
 def validate_token(token)
   decoded = (JWT.decode token, $secret, true, algorithm: 'HS256')[0]
   decoded['username'] && $userlist[decoded['username']] == decoded['password']
-
 rescue
   false
 end
@@ -61,9 +65,9 @@ def fetchTokenUsername(token)
   decoded['username']
 end
 
-def sendMessage(message, shouldSave=TRUE)
-  for user in $onlineUsers do
-    if user.getConnection != nil
+def sendMessage(message, shouldSave = TRUE)
+  $onlineUsers.each do |user|
+    unless user.getConnection.nil?
       user.getConnection << "\nid: #{$messageHistory.length}\n"
       user.getConnection << message
     end
@@ -73,59 +77,60 @@ def sendMessage(message, shouldSave=TRUE)
 end
 
 def sendHistory(user, from = 0, shouldSendAll = FALSE)
-  while from < $messageHistory.length()
-    user.getConnection << "\nid: #{from}\n"
-    user.getConnection << $messageHistory[from] if (shouldSendAll || $isImpMessage[from])
+  print 'Log sendHistory', from, shouldSendAll, '\n'
+  while from < $messageHistory.length
+    if shouldSendAll || $isImpMessage[from]
+      user.getConnection << "\nid: #{from}\n"
+      user.getConnection << $messageHistory[from]
+    end
     from += 1
   end
 end
 
 def sendPartMessagesAndUpdateUserList
   messages = []
-  for user in $onlineUsers do
-    if user.getConnection == nil
-      next
-    end
-    if user.getConnection().closed?
-      time =  Time.now.to_f
-      messages << "\nevent: Part\ndata: {\"user\": \"#{user.getUserName}\", \"created\": #{time}}\n\n\n"
-      print "Selected user #{user.getUserName} for Part\n"
-      $onlineUsers = $onlineUsers.select {|_user| _user.getUserName != user.getUserName}
-    end
+  $onlineUsers.each do |user|
+    next if user.getConnection.nil?
+
+    next unless user.getConnection.closed?
+
+    time = Time.now.to_f
+    messages << "event: Part\ndata: {\"user\": \"#{user.getUserName}\", \"created\": #{time}}\n\n\n"
+    print "Selected user #{user.getUserName} for Part\n"
+    $onlineUsers = $onlineUsers.reject { |_user| _user.getUserName == user.getUserName }
   end
 
-  for message in messages
-    #print "Seding Part Message"
-    #print message
+  messages.each do |message|
+    # print "Seding Part Message"
+    # print message
     sendMessage(message, false)
   end
 end
 
 def disconnect(userList)
-  for user in userList do
-    if user.getConnection == nil
-      next
-    end
+  userList.each do |user|
+    next if user.getConnection.nil?
+
     print "Disconnecting #{user.getUserName}\n"
     time =  Time.now.to_f
-    message = "\nevent: Disconnect\ndata: {\"created\": #{time}}\n\n\n"
+    message = "event: Disconnect\ndata: {\"created\": #{time}}\n\n\n"
     user.getConnection << message
-    user.getConnection().close()
-    $onlineUsers = $onlineUsers.select {|_user| _user.getUserName != user.getUserName}
+    user.getConnection.close
+    $onlineUsers = $onlineUsers.reject { |_user| _user.getUserName == user.getUserName }
   end
 end
 
 $scheduler.every '3600s' do
   time =  Time.now.to_f
   $uptime += 1
-  message = "\nevent: ServerStatus\ndata: {\"status\": \"Server uptime: #{$uptime} hours\", \"created\": #{time}}\n\n\n"
+  message = "event: ServerStatus\ndata: {\"status\": \"Server uptime: #{$uptime} hours\", \"created\": #{time}}\n\n\n"
 
-  for user in $onlineUsers do
+  $onlineUsers.each do |user|
     user.getConnection << message
   end
   $messageHistory << message
 end
-#$scheduler.join
+# $scheduler.join
 
 before do
   headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
@@ -151,8 +156,8 @@ post '/login' do
     token_payload = { 'username' => username, 'password' => password }
     token = JWT.encode token_payload, $secret, 'HS256'
     status = NEW_LOGIN
-    if ($onlineUsers.map {|user| user.getUserName}).include? username
-      disconnect($onlineUsers.select {|user| user.getUserName == username})
+    if $onlineUsers.map(&:getUserName).include? username
+      disconnect($onlineUsers.select { |user| user.getUserName == username })
       status = RE_LOGIN
     end
     newUser = OnlineUser.new(username, nil, status)
@@ -168,58 +173,62 @@ end
 post '/message' do
   sendPartMessagesAndUpdateUserList
 
-  token = ""
-  value = request.env["HTTP_AUTHORIZATION"]
-  return 403 if value == nil
+  token = ''
+  value = request.env['HTTP_AUTHORIZATION']
+  return 403 if value.nil?
+
   authBody = value.split(' ')
   return 403 if authBody.count != 2
   return 403 if authBody[0] != 'Bearer'
+
   token = authBody[1]
 
-  #puts "\nToken: "+token
+  # puts "\nToken: "+token
   return 403 unless validate_token token
+
   message = params['message']
   print "message is: #{message}"
-  return 422 if message == nil || message == ""
-  time =  Time.now.to_f
+  return 422 if message.nil? || message == ''
+
+  time = Time.now.to_f
   username = fetchTokenUsername token
-  sendMessage "\nevent: Message\ndata: {\"user\": \"#{username}\", \"created\": #{time}, \"message\": \"#{message}\"}\n\n\n"
+  sendMessage "event: Message\ndata: {\"user\": \"#{username}\", \"created\": #{time}, \"message\": \"#{message}\"}\n\n\n"
   status 201
 end
 
 get '/stream/:token', provides: 'text/event-stream' do |_token|
   return 403 unless validate_token _token
+
   username = fetchTokenUsername _token
-  print "All users: #{$onlineUsers.map {|user| user.getUserName}} \n"
+  print "All users: #{$onlineUsers.map(&:getUserName)} \n"
   print "\nrequesting user: #{username}\n"
-  user = ($onlineUsers.select {|_user| _user.getUserName == username})[0]
-  if user == nil
-    return 403
-  end
+  user = ($onlineUsers.select { |_user| _user.getUserName == username })[0]
+  return 403 if user.nil?
 
   stream(:keep_open) do |out|
     user.setConnection(out)
-    time =  Time.now.to_f
+    time = Time.now.to_f
 
+    print 'statuse: ', user.getStatus
     if user.getStatus != CONNECTED
-      sendHistory user, 0, FALSE
-      out << "event: Users\n"
-      out << "data: {\"users\": #{$onlineUsers.map {|user| user.getUserName}},\n"
-      out << "data: \"created\": #{time}}\n\n"
-      if user.getStatus == NEW_LOGIN
-        sendMessage "event: Join\ndata: {\"user\": \"#{username}\", \"created\": #{time}}\n\n", false
+      if !request.env['HTTP_LAST_EVENT_ID'].nil?
+        print "Last event id: #{request.env['HTTP_LAST_EVENT_ID']}\n"
+        sendHistory user, request.env['HTTP_LAST_EVENT_ID'].to_i + 1, TRUE
+      else
+        sendHistory user, 0, FALSE
+        out << "event: Users\n"
+        out << "data: {\"users\": #{$onlineUsers.map(&:getUserName)},\n"
+        out << "data: \"created\": #{time}}\n\n"
+        if user.getStatus == NEW_LOGIN
+          sendMessage "event: Join\ndata: {\"user\": \"#{username}\", \"created\": #{time}}\n\n", false
+        end
+        user.setStatus CONNECTED
       end
-      user.setStatus CONNECTED
     end
 
-    if request.env['HTTP_LAST_EVENT_ID'] != nil
-      print "Last event id: #{request.env['HTTP_LAST_EVENT_ID']}\n"
-      sendHistory user, (request.env['HTTP_LAST_EVENT_ID']).to_i + 1, TRUE
-    end
-
-      #$onlineUsers = $onlineUsers.select {|user| user.getUserName != username}
-    #sendPartMessagesAndUpdateUserList()
+    # $onlineUsers = $onlineUsers.select {|user| user.getUserName != username}
+    # sendPartMessagesAndUpdateUserList()
     # purge dead connections
-    #$onlineUsers.map {}.reject!(&:closed?)
+    # $onlineUsers.map {}.reject!(&:closed?)
   end
 end
