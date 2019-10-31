@@ -16,7 +16,8 @@ CONNECTED = 2
 $userlist = {}
 $secret = 'SECRET'
 $onlineUsers = []
-$messageHistory = ["\nevent: ServerStatus\ndata: {\"status\": \"Server Started\", \"created\": #{Time.now.to_f}}\n\n\n"]
+$messageHistory = ["\nid: 123\nevent: ServerStatus\ndata: {\"status\": \"Server Started\", \"created\": #{Time.now.to_f}}\n\n\n"]
+$isImpMessage = [TRUE]
 #$messageHistory = []
 
 class OnlineUser
@@ -63,15 +64,19 @@ end
 def sendMessage(message, shouldSave=TRUE)
   for user in $onlineUsers do
     if user.getConnection != nil
+      user.getConnection << "\nid: #{$messageHistory.length}\n"
       user.getConnection << message
     end
   end
-  $messageHistory << message if shouldSave
+  $messageHistory << message
+  $isImpMessage << shouldSave
 end
 
-def sendHistory(user)
-  for message in $messageHistory
-    user.getConnection << message
+def sendHistory(user, from = 0, shouldSendAll = FALSE)
+  while from < $messageHistory.length()
+    user.getConnection << "\nid: #{from}\n"
+    user.getConnection << $messageHistory[from] if (shouldSendAll || $isImpMessage[from])
+    from += 1
   end
 end
 
@@ -184,7 +189,6 @@ end
 
 get '/stream/:token', provides: 'text/event-stream' do |_token|
   return 403 unless validate_token _token
-  #print "Last event id: #{request.env['HTTP_LAST_EVENT_ID']}\n"
   username = fetchTokenUsername _token
   print "All users: #{$onlineUsers.map {|user| user.getUserName}} \n"
   print "\nrequesting user: #{username}\n"
@@ -198,18 +202,22 @@ get '/stream/:token', provides: 'text/event-stream' do |_token|
     time =  Time.now.to_f
 
     if user.getStatus != CONNECTED
-      sendHistory user
+      sendHistory user, 0, FALSE
+      out << "event: Users\n"
+      out << "data: {\"users\": #{$onlineUsers.map {|user| user.getUserName}},\n"
+      out << "data: \"created\": #{time}}\n\n"
       if user.getStatus == NEW_LOGIN
         sendMessage "event: Join\ndata: {\"user\": \"#{username}\", \"created\": #{time}}\n\n", false
       end
       user.setStatus CONNECTED
     end
 
+    if request.env['HTTP_LAST_EVENT_ID'] != nil
+      print "Last event id: #{request.env['HTTP_LAST_EVENT_ID']}\n"
+      sendHistory user, (request.env['HTTP_LAST_EVENT_ID']).to_i + 1, TRUE
+    end
 
-    #$onlineUsers = $onlineUsers.select {|user| user.getUserName != username}
-    out << "event: Users\n"
-    out << "data: {\"users\": #{$onlineUsers.map {|user| user.getUserName}},\n"
-    out << "data: \"created\": #{time}}\n\n"
+      #$onlineUsers = $onlineUsers.select {|user| user.getUserName != username}
     #sendPartMessagesAndUpdateUserList()
     # purge dead connections
     #$onlineUsers.map {}.reject!(&:closed?)
